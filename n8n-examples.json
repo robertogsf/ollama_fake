@@ -1,0 +1,203 @@
+{
+  "name": "Ejemplos de workflows para n8n con Ollama Fake",
+  "description": "Ejemplos de configuración y workflows para usar con n8n",
+  "examples": [
+    {
+      "name": "Generación simple de texto",
+      "description": "Workflow básico que genera texto usando Ollama",
+      "workflow": {
+        "nodes": [
+          {
+            "parameters": {
+              "baseURL": "http://localhost:11434",
+              "model": "llama2",
+              "prompt": "Explica en 100 palabras qué es la inteligencia artificial"
+            },
+            "type": "n8n-nodes-base.ollama",
+            "typeVersion": 1,
+            "position": [400, 300],
+            "name": "Ollama - Generar Texto"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Chat conversacional",
+      "description": "Workflow que mantiene una conversación usando el formato chat",
+      "workflow": {
+        "nodes": [
+          {
+            "parameters": {
+              "baseURL": "http://localhost:11434",
+              "model": "llama2",
+              "operation": "chat",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "Eres un asistente útil y amigable."
+                },
+                {
+                  "role": "user", 
+                  "content": "¿Puedes ayudarme con programación en Python?"
+                }
+              ]
+            },
+            "type": "n8n-nodes-base.ollama",
+            "typeVersion": 1,
+            "position": [400, 300],
+            "name": "Ollama - Chat"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Procesamiento de texto en lote",
+      "description": "Workflow que procesa múltiples textos usando Ollama",
+      "workflow": {
+        "nodes": [
+          {
+            "parameters": {
+              "values": {
+                "string": [
+                  {
+                    "name": "texto1",
+                    "value": "Explica qué es JavaScript"
+                  },
+                  {
+                    "name": "texto2", 
+                    "value": "Explica qué es Python"
+                  },
+                  {
+                    "name": "texto3",
+                    "value": "Explica qué es HTML"
+                  }
+                ]
+              }
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 1,
+            "position": [200, 300],
+            "name": "Datos de entrada"
+          },
+          {
+            "parameters": {
+              "baseURL": "http://localhost:11434",
+              "model": "codellama",
+              "prompt": "={{ $json.texto1 }} en términos simples para principiantes"
+            },
+            "type": "n8n-nodes-base.ollama",
+            "typeVersion": 1,
+            "position": [400, 300],
+            "name": "Ollama - Procesar"
+          }
+        ],
+        "connections": {
+          "Datos de entrada": {
+            "main": [
+              [
+                {
+                  "node": "Ollama - Procesar",
+                  "type": "main",
+                  "index": 0
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "Análisis de sentimientos",
+      "description": "Workflow que analiza el sentimiento de un texto",
+      "workflow": {
+        "nodes": [
+          {
+            "parameters": {
+              "values": {
+                "string": [
+                  {
+                    "name": "texto",
+                    "value": "Estoy muy feliz con los resultados del proyecto"
+                  }
+                ]
+              }
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 1,
+            "position": [200, 300],
+            "name": "Texto a analizar"
+          },
+          {
+            "parameters": {
+              "baseURL": "http://localhost:11434",
+              "model": "llama2",
+              "prompt": "Analiza el sentimiento del siguiente texto y clasifícalo como positivo, negativo o neutral. Texto: {{ $json.texto }}"
+            },
+            "type": "n8n-nodes-base.ollama",
+            "typeVersion": 1,
+            "position": [400, 300],
+            "name": "Ollama - Análisis"
+          }
+        ],
+        "connections": {
+          "Texto a analizar": {
+            "main": [
+              [
+                {
+                  "node": "Ollama - Análisis",
+                  "type": "main",
+                  "index": 0
+                }
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "configuracion_comun": {
+    "baseURL": "http://localhost:11434",
+    "modelos_disponibles": [
+      "llama2",
+      "llama2:7b", 
+      "codellama",
+      "mistral"
+    ],
+    "parametros_opcionales": {
+      "temperature": 0.8,
+      "top_p": 0.9,
+      "top_k": 40,
+      "max_tokens": 256,
+      "stream": false
+    }
+  },
+  "casos_de_uso": [
+    {
+      "nombre": "Generación de contenido",
+      "descripcion": "Crear artículos, descripciones de productos, etc.",
+      "modelo_recomendado": "llama2"
+    },
+    {
+      "nombre": "Asistencia con código",
+      "descripcion": "Ayuda con programación, debugging, explicaciones",
+      "modelo_recomendado": "codellama"
+    },
+    {
+      "nombre": "Análisis de texto",
+      "descripcion": "Sentimientos, clasificación, resúmenes",
+      "modelo_recomendado": "llama2"
+    },
+    {
+      "nombre": "Conversación general",
+      "descripcion": "Chat, preguntas y respuestas generales",
+      "modelo_recomendado": "mistral"
+    }
+  ],
+  "tips": [
+    "Usa prompts específicos y claros para mejores resultados",
+    "El modelo 'codellama' está optimizado para tareas de programación",
+    "Puedes encadenar múltiples nodos Ollama para procesamientos complejos",
+    "Usa variables de n8n ({{ $json.campo }}) para contenido dinámico",
+    "El servicio fake genera respuestas consistentes basadas en el hash del prompt"
+  ]
+}
