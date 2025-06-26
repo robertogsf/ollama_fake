@@ -9,6 +9,7 @@ import gc
 import os
 from dotenv import load_dotenv
 from model_config import REAL_MODELS, DEFAULT_MODEL, DEVICE_CONFIG
+from fallback_responses import get_fallback_response
 
 # Cargar variables de entorno
 load_dotenv()
@@ -97,17 +98,43 @@ class ModelManager:
         if model_key is None:
             model_key = DEFAULT_MODEL
             
-        # Cargar modelo si es necesario
-        if not self.load_model(model_key):
-            raise Exception(f"No se pudo cargar el modelo {model_key}")
-            
-        if self.current_model is None or self.current_tokenizer is None:
-            raise Exception("No hay modelo cargado")
-        
         # Obtener configuración del modelo
         model_config = REAL_MODELS[model_key]
         max_tokens = max_tokens or model_config.get("max_tokens", 1024)
         temperature = temperature or model_config.get("temperature", 0.7)
+        
+        # Intentar cargar modelo si es necesario
+        model_loaded = self.load_model(model_key)
+        
+        # Si no se puede cargar el modelo y no es streaming, usar respuesta de respaldo
+        if not model_loaded and not stream:
+            print(f"⚠️  No se pudo cargar {model_key}, usando respuesta de respaldo")
+            return get_fallback_response(model_key, prompt)
+        elif not model_loaded and stream:
+            print(f"⚠️  No se pudo cargar {model_key}, usando respuesta de respaldo en streaming")
+            # Para streaming, devolver la respuesta de respaldo como generador
+            def fallback_stream():
+                response = get_fallback_response(model_key, prompt)
+                words = response.split()
+                for word in words:
+                    yield word + " "
+                    import time
+                    time.sleep(0.1)  # Simular latencia
+            return fallback_stream()
+        
+        if self.current_model is None or self.current_tokenizer is None:
+            print(f"⚠️  Modelo no disponible, usando respuesta de respaldo")
+            if stream:
+                def fallback_stream():
+                    response = get_fallback_response(model_key, prompt)
+                    words = response.split()
+                    for word in words:
+                        yield word + " "
+                        import time
+                        time.sleep(0.1)
+                return fallback_stream()
+            else:
+                return get_fallback_response(model_key, prompt)
         
         if stream:
             return self._generate_stream(prompt, model_config, max_tokens, temperature)
@@ -156,28 +183,28 @@ class ModelManager:
     
     def _generate_complete(self, prompt, model_config, max_tokens, temperature):
         """Generar texto completo"""
-        # Formatear prompt para modelos de chat
-        if "instruct" in model_config["model_name"].lower():
-            formatted_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
-        else:
-            formatted_prompt = prompt
-        
-        # Tokenizar
-        inputs = self.current_tokenizer.encode(formatted_prompt, return_tensors="pt")
-        if self.device == "cuda":
-            inputs = inputs.to("cuda")
-        
-        # Configurar generación
-        generation_kwargs = {
-            "max_new_tokens": max_tokens,
-            "temperature": temperature,
-            "do_sample": True,
-            "pad_token_id": self.current_tokenizer.eos_token_id,
-            "eos_token_id": self.current_tokenizer.eos_token_id,
-        }
-        
-        # Generación completa
         try:
+            # Formatear prompt para modelos de chat
+            if "instruct" in model_config["model_name"].lower():
+                formatted_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+            else:
+                formatted_prompt = prompt
+            
+            # Tokenizar
+            inputs = self.current_tokenizer.encode(formatted_prompt, return_tensors="pt")
+            if self.device == "cuda":
+                inputs = inputs.to("cuda")
+            
+            # Configurar generación
+            generation_kwargs = {
+                "max_new_tokens": max_tokens,
+                "temperature": temperature,
+                "do_sample": True,
+                "pad_token_id": self.current_tokenizer.eos_token_id,
+                "eos_token_id": self.current_tokenizer.eos_token_id,
+            }
+            
+            # Generación completa
             with torch.no_grad():
                 outputs = self.current_model.generate(inputs, **generation_kwargs)
             
@@ -186,8 +213,10 @@ class ModelManager:
             response = self.current_tokenizer.decode(new_tokens, skip_special_tokens=True)
             return response.strip()
         except Exception as e:
-            print(f"❌ Error en generación: {e}")
-            return f"Error generando respuesta: {str(e)}"
+            print(f"❌ Error en generación real: {e}")
+            print("🔄 Usando respuesta de respaldo...")
+            # Usar respuesta de respaldo
+            return get_fallback_response(self.current_model_name, prompt)
     
     def get_available_models(self):
         """Obtener lista de modelos disponibles"""
