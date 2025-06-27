@@ -26,6 +26,7 @@ models/
 cache/
 .transformers_cache/
 .cache/
+models_cache/
 
 # Variables de entorno
 .env
